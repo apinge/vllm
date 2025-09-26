@@ -233,7 +233,18 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 256,
                 'BLOCK_N': 64,
                 'waves_per_eu': 2,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+        triton.Config(
+            {
+                'BLOCK_M': 256,
+                'BLOCK_N': 64,
+                'waves_per_eu': 2,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=8),
@@ -242,7 +253,18 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 128,
                 'BLOCK_N': 128,
                 'waves_per_eu': 2,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 128,
+                'waves_per_eu': 2,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=4),
@@ -251,16 +273,50 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 256,
                 'BLOCK_N': 128,
                 'waves_per_eu': 2,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=8),
         triton.Config(
             {
+                'BLOCK_M': 256,
+                'BLOCK_N': 128,
+                'waves_per_eu': 2,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+
+        triton.Config(
+            {
                 'BLOCK_M': 128,
                 'BLOCK_N': 64,
                 'waves_per_eu': 1,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 1,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 3,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=4),
@@ -269,16 +325,8 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 128,
                 'BLOCK_N': 64,
                 'waves_per_eu': 3,
-                'PRE_LOAD_V': True
-            },
-            num_stages=1,
-            num_warps=4),
-        triton.Config(
-            {
-                'BLOCK_M': 128,
-                'BLOCK_N': 64,
-                'waves_per_eu': 3,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=4),
@@ -287,7 +335,18 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 64,
                 'BLOCK_N': 64,
                 'waves_per_eu': 4,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+         triton.Config(
+            {
+                'BLOCK_M': 64,
+                'BLOCK_N': 64,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=8),
@@ -296,10 +355,186 @@ def get_cdna_autotune_configs():
                 'BLOCK_M': 32,
                 'BLOCK_N': 32,
                 'waves_per_eu': 4,
-                'PRE_LOAD_V': False
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
             },
             num_stages=1,
             num_warps=8),
+         triton.Config(
+            {
+                'BLOCK_M': 32,
+                'BLOCK_N': 32,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+
+        # double waves_per_eu
+           triton.Config(
+            {
+                'BLOCK_M': 256,
+                'BLOCK_N': 64,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+        triton.Config(
+            {
+                'BLOCK_M': 256,
+                'BLOCK_N': 64,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 128,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+            triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 128,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+
+        triton.Config(
+            {
+                'BLOCK_M': 256,
+                'BLOCK_N': 128,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+        triton.Config(
+            {
+                'BLOCK_M': 256,
+                'BLOCK_N': 128,
+                'waves_per_eu': 4,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 2,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+         triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 2,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+        triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 6,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+            triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 6,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+         triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+            triton.Config(
+            {
+                'BLOCK_M': 128,
+                'BLOCK_N': 64,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=4),
+        triton.Config(
+            {
+                'BLOCK_M': 64,
+                'BLOCK_N': 64,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+            triton.Config(
+            {
+                'BLOCK_M': 64,
+                'BLOCK_N': 64,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+        triton.Config(
+            {
+                'BLOCK_M': 32,
+                'BLOCK_N': 32,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': False,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+             triton.Config(
+            {
+                'BLOCK_M': 32,
+                'BLOCK_N': 32,
+                'waves_per_eu': 8,
+                'PRE_LOAD_V': True,
+                'matrix_instr_nonkdim':16
+            },
+            num_stages=1,
+            num_warps=8),
+
         # TODO: This config fails with head_size not pow2 with data mismatches.
         #    triton.Config({'BLOCK_M': 32, 'BLOCK_N': 16, 'waves_per_eu': 1,
         #                   'PRE_LOAD_V': False}, num_stages=1, num_warps=4),
