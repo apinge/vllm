@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Type
 
 import torch
+from vllm import _custom_ops as ops
 from xformers import ops as xops
 from xformers.ops.fmha.attn_bias import (AttentionBias,
                                          BlockDiagonalCausalMask,
@@ -23,6 +24,8 @@ from vllm.attention.ops.paged_attn import (PagedAttention,
 from vllm.logger import init_logger
 
 logger = init_logger(__name__)
+
+_PARTITION_SIZE_ROCM = 256
 
 
 class XFormersBackend(AttentionBackend):
@@ -610,20 +613,78 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 block_tables_arg,
             ) = get_seq_len_block_table_args(decode_meta, False, attn_type)
 
-            output[num_prefill_query_tokens:] = PagedAttention.forward_decode(
-                decode_query,
-                key_cache,
-                value_cache,
-                block_tables_arg,
-                seq_lens_arg,
-                max_seq_len_arg,
-                self.kv_cache_dtype,
-                self.num_kv_heads,
-                self.scale,
-                self.alibi_slopes,
-                layer._k_scale,
-                layer._v_scale,
-            )
+            #============added===========
+            num_seqs, num_heads, head_size = decode_query.shape
+            block_size = value_cache.shape[3]
+            gqa_ratio = num_heads // self.num_kv_heads
+            from vllm.platforms.rocm import use_rocm_custom_paged_attention
+            use_custom = use_rocm_custom_paged_attention(
+                decode_query.dtype, head_size, block_size, gqa_ratio,
+                decode_meta.max_decode_seq_len, self.sliding_window,
+                self.kv_cache_dtype, self.alibi_slopes)
+
+            if use_custom:
+                max_seq_len = (decode_meta.max_decode_seq_len if self.attn_type
+                               != AttentionType.ENCODER_DECODER else
+                               decode_meta.max_encoder_seq_len)
+                assert max_seq_len is not None
+                max_num_partitions = (
+                    (max_seq_len + _PARTITION_SIZE_ROCM - 1) //
+                    _PARTITION_SIZE_ROCM)
+                assert _PARTITION_SIZE_ROCM % block_size == 0
+                tmp_output = torch.empty(
+                    size=(num_seqs, num_heads, max_num_partitions, head_size),
+                    dtype=query.dtype,
+                    device=output.device,
+                )
+                exp_sums = torch.empty(
+                    size=(num_seqs, num_heads, max_num_partitions),
+                    dtype=torch.float32,
+                    device=output.device,
+                )
+                max_logits = torch.empty_like(exp_sums)
+
+                query_start_loc = None
+                ops.paged_attention_rocm(
+                    output[num_prefill_query_tokens:],
+                    exp_sums,
+                    max_logits,
+                    tmp_output,
+                    decode_query,
+                    key_cache,
+                    value_cache,
+                    self.num_kv_heads,
+                    self.scale,
+                    decode_meta.block_tables
+                    if self.attn_type != AttentionType.ENCODER_DECODER else
+                    decode_meta.cross_block_tables,
+                    decode_meta.seq_lens_tensor
+                    if self.attn_type != AttentionType.ENCODER_DECODER else
+                    decode_meta.encoder_seq_lens_tensor,
+                    query_start_loc,
+                    block_size,
+                    max_seq_len,
+                    self.alibi_slopes,
+                    self.kv_cache_dtype,
+                    layer._k_scale,
+                    layer._v_scale,
+                    output_scale,
+                )
+            else:
+                output[num_prefill_query_tokens:] = PagedAttention.forward_decode(
+                    decode_query,
+                    key_cache,
+                    value_cache,
+                    block_tables_arg,
+                    seq_lens_arg,
+                    max_seq_len_arg,
+                    self.kv_cache_dtype,
+                    self.num_kv_heads,
+                    self.scale,
+                    self.alibi_slopes,
+                    layer._k_scale,
+                    layer._v_scale,
+                )
 
         # Reshape the output tensor.
         return output.view(-1, self.num_heads * self.head_size)
