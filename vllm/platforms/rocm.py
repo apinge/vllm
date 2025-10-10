@@ -249,6 +249,11 @@ class RocmPlatform(Platform):
             if not cls.has_device_capability(90):
                 # not Instinct series GPUs.
                 logger.info("flash_attn is not supported on NAVI GPUs.")
+        #========Added for xformers support======
+        if selected_backend == _Backend.XFORMERS:
+            logger.info("Using xformers, make sure you are using rocm6.4.* on AMD")
+            return "vllm.attention.backends.xformers.XFormersBackend"
+        #========================================
         else:
             logger.info("%s is not supported in AMD GPUs.", selected_backend)
         logger.info("Using ROCmFlashAttention backend.")

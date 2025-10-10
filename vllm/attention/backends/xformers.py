@@ -745,7 +745,8 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 value,
                 attn_bias=attn_bias[0],
                 p=0.0,
-                scale=self.scale)
+                scale=self.scale,
+                op=xops.fmha.ck.FwOp) #========Added for xformers support AMD========
             return out.view_as(original_query)
 
         # Attention with alibi slopes.
