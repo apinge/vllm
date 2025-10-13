@@ -1188,7 +1188,8 @@ class ModelConfig:
                                           effective_max_seq_len)
         # CUDAGraph capture not supported for enc-dec models and mllama on ROCm
         ROCM_UNSUPPORTED_MODELS = ['mllama']
-        unsupported_rocm = (self.hf_config.model_type
+        #============enable cuda graph for whisper on AMD========
+        '''unsupported_rocm = (self.hf_config.model_type
                             in ROCM_UNSUPPORTED_MODELS
                             or self.is_encoder_decoder)
 
@@ -1197,7 +1198,7 @@ class ModelConfig:
             logger.warning(
                 "CUDA graph is not supported for %s on ROCm yet, fallback "
                 "to eager mode.", self.hf_config.model_type)
-            self.enforce_eager = True
+            self.enforce_eager = True'''
 
     def _verify_bnb_config(self) -> None:
         """
