@@ -28,6 +28,7 @@ from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
+from vllm.model_executor.layers.layernorm import LayerNorm
 from vllm.model_executor.model_loader.utils import set_default_torch_dtype
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -344,7 +345,13 @@ class WhisperEncoderLayer(nn.Module):
             prefix=f"{prefix}.self_attn",
             standalone_encoder=is_standalone_encoder,
         )
-        self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim)
+        self.self_attn_layer_norm = LayerNorm(
+                    hidden_size=self.embed_dim,
+                    eps=1e-5,
+                    has_weight=True,
+                    has_bias=True,
+                    dtype=vllm_config.model_config.dtype,
+                )
         self.mlp = WhisperMLP(
             embed_dim=config.d_model,
             ffn_dim=config.encoder_ffn_dim,
@@ -352,7 +359,13 @@ class WhisperEncoderLayer(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.mlp",
         )
-        self.final_layer_norm = nn.LayerNorm(self.embed_dim)
+        self.final_layer_norm = LayerNorm(
+                    hidden_size=self.embed_dim,
+                    eps=1e-5,
+                    has_weight=True,
+                    has_bias=True,
+                    dtype=vllm_config.model_config.dtype,
+                )
 
     def forward(
         self,
@@ -361,9 +374,14 @@ class WhisperEncoderLayer(nn.Module):
         residual = hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
         hidden_states = self.self_attn(hidden_states=hidden_states)
+        """
+        before fusion:
         hidden_states = residual + hidden_states
         residual = hidden_states
         hidden_states = self.final_layer_norm(hidden_states)
+        after fusion:
+        """
+        hidden_states, residual = self.final_layer_norm(hidden_states, residual)
         hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
@@ -466,7 +484,13 @@ class WhisperEncoder(nn.Module):
                                                is_standalone_encoder),
             prefix=f"{prefix}.layers",
         )
-        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.layer_norm = LayerNorm(
+                    hidden_size=config.d_model,
+                    eps=1e-5,
+                    has_weight=True,
+                    has_bias=True,
+                    dtype=vllm_config.model_config.dtype,
+                )
 
         maybe_fp32_init_ctx = set_default_torch_dtype(
             torch.float32) if init_in_fp32 else nullcontext()

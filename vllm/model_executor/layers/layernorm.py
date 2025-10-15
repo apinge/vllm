@@ -16,6 +16,10 @@ def is_rocm_aiter_rmsnorm_enabled() -> bool:
         and envs.VLLM_ROCM_USE_AITER_RMSNORM \
         and envs.VLLM_ROCM_USE_AITER
 
+def is_rocm_aiter_layernorm_enabled() -> bool:
+    return current_platform.is_rocm() \
+        and envs.VLLM_ROCM_USE_AITER_LAYERNORM \
+        and envs.VLLM_ROCM_USE_AITER
 
 def rms_norm(x: torch.Tensor, weight: torch.Tensor,
              variance_epsilon: float) -> torch.Tensor:
@@ -29,6 +33,22 @@ def rms_norm(x: torch.Tensor, weight: torch.Tensor,
     )
     return out
 
+def layer_norm(
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor,
+    variance_epsilon: float
+) -> torch.Tensor:
+    from vllm import _custom_ops as ops
+    out = torch.empty_like(x)
+    ops.layer_norm(
+        out,
+        x,
+        weight,
+        bias,
+        variance_epsilon,
+    )
+    return out
 
 def fused_add_rms_norm(
         x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor,
@@ -42,6 +62,23 @@ def fused_add_rms_norm(
     )
     return x, residual
 
+def fused_add_layer_norm(
+    x: torch.Tensor,
+    residual: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor,
+    variance_epsilon: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    from vllm import _custom_ops as ops
+
+    ops.fused_add_layer_norm(
+        x,
+        residual,
+        weight,
+        bias,
+        variance_epsilon,
+    )
+    return x, residual
 
 def rocm_aiter_rms_norm(x: torch.Tensor, weight: torch.Tensor,
                         variance_epsilon: float) -> torch.Tensor:
@@ -54,6 +91,29 @@ def rocm_aiter_rms_norm(x: torch.Tensor, weight: torch.Tensor,
 
     return rocm_aiter.rms_norm(x, weight, variance_epsilon)
 
+def rocm_aiter_layer_norm(
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor,
+    variance_epsilon: float
+) -> torch.Tensor:
+    import aiter as rocm_aiter
+    if x.dim() > 2:
+        """
+        aiter provide layernorm with dim >2 kernel directly 
+        TODO: update with rocm_aiter.layer_norm without reshape
+        """
+        x_original_shape = x.shape
+        x = x.reshape(-1, x_original_shape[-1])
+        x = rocm_aiter.layernorm2d_fwd(x, weight, bias, epsilon=variance_epsilon,  x_bias=None)
+        return x.reshape(x_original_shape)
+    return rocm_aiter.layernorm2d_fwd(
+        input = x,
+        weight = weight,
+        bias= bias,
+        epsilon=variance_epsilon,
+        x_bias=None
+    )
 
 def rocm_aiter_fused_add_rms_norm(
         x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor,
@@ -73,6 +133,31 @@ def rocm_aiter_fused_add_rms_norm(
     )
     return output, residual_out
 
+def rocm_aiter_fused_add_layer_norm(
+    x: torch.Tensor,
+    residual: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor,
+    variance_epsilon: float
+) -> tuple[torch.Tensor, torch.Tensor]:
+
+    import aiter as rocm_aiter
+
+    residual_out = torch.empty_like(residual)
+    output = torch.empty_like(x)
+
+    rocm_aiter.layernorm2d_fwd_with_add(
+        output,         # out
+        x,              # input
+        residual,       # residual_in
+        residual_out,   # residual_out
+        weight,         # weight
+        bias,           # bias
+        variance_epsilon,  # epsilon
+        None,           # x_bias (optional)
+    )
+    return output, residual_out
+
 
 def dispatch_cuda_rmsnorm_func(add_residual: bool):
     if add_residual:
@@ -83,6 +168,17 @@ def dispatch_cuda_rmsnorm_func(add_residual: bool):
     if is_rocm_aiter_rmsnorm_enabled():
         return rocm_aiter_rms_norm
     return rms_norm
+
+
+def dispatch_cuda_layernorm_func(add_residual: bool):
+    if add_residual:
+        if is_rocm_aiter_layernorm_enabled():
+            return rocm_aiter_fused_add_layer_norm
+        return fused_add_layer_norm
+    assert add_residual == False
+    if is_rocm_aiter_layernorm_enabled():
+        return rocm_aiter_layer_norm
+    return layer_norm
 
 
 @CustomOp.register("rms_norm")
@@ -200,6 +296,108 @@ class RMSNorm(CustomOp):
         return s
 
 
+@CustomOp.register("layer_norm")
+class LayerNorm(CustomOp):
+    """Layer normalization.
+
+    Computes y = (x - mean) / sqrt(var + eps) * weight + bias
+    where weight and bias are learned parameters.
+    """
+
+    def __init__(
+        self,
+        hidden_size: int,
+        eps: float = 1e-5,
+        has_weight: bool = True,
+        has_bias: bool = True,
+        dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        super().__init__()
+
+        self.hidden_size = hidden_size
+        self.variance_epsilon = eps
+        self.has_weight = has_weight
+        self.has_bias = has_bias
+
+        dtype = dtype or torch.float32
+        if has_weight:
+            self.weight = nn.Parameter(torch.ones(hidden_size, dtype=dtype))
+        else:
+            self.register_parameter("weight", None)
+
+        if has_bias:
+            self.bias = nn.Parameter(torch.zeros(hidden_size, dtype=dtype))
+        else:
+            self.register_parameter("bias", None)
+
+    def forward_native(
+        self,
+        x: torch.Tensor,
+        residual: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """PyTorch-native implementation equivalent to forward()."""
+        orig_dtype = x.dtype
+        x = x.to(torch.float32)
+
+        if residual is not None:
+            x = x + residual.to(torch.float32)
+            residual = x.to(orig_dtype)
+
+        hidden_size = x.shape[-1]
+        if hidden_size != self.hidden_size:
+            raise ValueError(
+                f"Expected hidden_size={self.hidden_size}, but got {hidden_size}"
+            )
+
+        mean = x.mean(dim=-1, keepdim=True)
+        var = x.var(dim=-1, unbiased=False, keepdim=True)
+        normed = (x - mean) / torch.sqrt(var + self.variance_epsilon)
+
+        if self.has_weight:
+            normed = normed * self.weight
+        if self.has_bias:
+            normed = normed + self.bias
+
+        normed = normed.to(orig_dtype)
+
+        if residual is None:
+            return normed
+        else:
+            return normed, residual
+
+
+    def forward_cuda(
+        self,
+        x: torch.Tensor,
+        residual: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+ 
+        add_residual = residual is not None
+        norm_func = dispatch_cuda_layernorm_func(add_residual)
+
+        if add_residual:
+            return norm_func(
+                x,
+                residual,
+                self.weight.data if self.has_weight else None,
+                self.bias.data if self.has_bias else None,
+                self.variance_epsilon,
+            )
+        else:
+            return norm_func(
+                x,
+                self.weight.data if self.has_weight else None,
+                self.bias.data if self.has_bias else None,
+                self.variance_epsilon,
+            )
+
+
+
+    def extra_repr(self) -> str:
+        s = f"hidden_size={self.weight.data.size(0)}"
+        s += f", eps={self.variance_epsilon}"
+        return s
+    
 @CustomOp.register("gemma_rms_norm")
 class GemmaRMSNorm(CustomOp):
     """RMS normalization for Gemma.

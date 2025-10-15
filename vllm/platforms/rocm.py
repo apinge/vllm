@@ -344,6 +344,10 @@ class RocmPlatform(Platform):
                         "vllm.v1.worker.gpu_worker.Worker"
                 else:
                     parallel_config.worker_cls = "vllm.worker.worker.Worker"
+        use_aiter_layer_norm = envs.VLLM_ROCM_USE_AITER and \
+             envs.VLLM_ROCM_USE_AITER_LAYERNORM
+        if use_aiter_layer_norm:
+            vllm_config.compilation_config.custom_ops.append("+layer_norm")
 
     @classmethod
     def verify_model_arch(cls, model_arch: str) -> None:
