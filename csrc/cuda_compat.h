@@ -4,10 +4,10 @@
   #include <hip/hip_runtime.h>
 #endif
 
-#ifndef USE_ROCM
-  #define WARP_SIZE 32
+#ifdef USE_ROCM
+  #define WARP_SIZE 64
 #else
-  #define WARP_SIZE warpSize
+  #define WARP_SIZE 32
 #endif
 
 #ifndef USE_ROCM
