@@ -1118,11 +1118,9 @@ class ModelConfig:
     def _verify_cuda_graph(self) -> None:
         if self.enforce_eager:
             logger.warning(
-                "CUDA graph is not supported for %s on ROCm yet, fallback "
-                "to eager mode.",
+                "CUDA graph is not supported for %s on eager mode.",
                 self.hf_config.model_type,
             )
-            self.enforce_eager = True
 
     def _verify_bnb_config(self) -> None:
         """
