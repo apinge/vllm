@@ -247,13 +247,7 @@ class RocmAttentionImpl(AttentionImpl):
 
         RocmAttentionBackend.validate_head_size(head_size)
 
-        if attn_type != AttentionType.DECODER:
-            raise NotImplementedError(
-                "Encoder self-attention and "
-                "encoder/decoder cross-attention "
-                "are not implemented for "
-                "RocmAttentionImpl"
-            )
+        logger.debug(f"[DEBUG] attention type {attn_type} ")
 
         self.fp8_dtype = current_platform.fp8_dtype()
 
