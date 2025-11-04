@@ -1749,6 +1749,7 @@ class EngineArgs:
             "XFORMERS",
             "ROCM_ATTN",
             "ROCM_AITER_UNIFIED_ATTN",
+            "ROCM_AITER_FA",
         ]
         if (
             envs.is_set("VLLM_ATTENTION_BACKEND")

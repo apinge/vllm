@@ -1095,12 +1095,9 @@ class ModelConfig:
             current_platform.verify_quantization(self.quantization)
 
     def _verify_cuda_graph(self) -> None:
-        # CUDAGraph capture not supported for encoder-decoder models on ROCm
-        unsupported_rocm = self.is_encoder_decoder
-        if unsupported_rocm and not self.enforce_eager and current_platform.is_rocm():
+        if self.enforce_eager :
             logger.warning(
-                "CUDA graph is not supported for %s on ROCm yet, fallback "
-                "to eager mode.",
+                "CUDA graph is not supported for %s on eager mode.",
                 self.hf_config.model_type,
             )
             self.enforce_eager = True
